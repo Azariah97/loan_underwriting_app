@@ -1,22 +1,22 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import pdfplumber  # PyMuPDF for reading PDFs
+from pdf2image import convert_from_path
+from PIL import Image
+import pytesseract
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
-# Function to extract text from PDF
-import pdfplumber
-
-# Function to extract text from PDF using pdfplumber
+# Function to extract text from PDF using OCR
 def extract_text_from_pdf(file):
     text = ""
-    with pdfplumber.open(file) as pdf:
-        for page in pdf.pages:
-            text += page.extract_text()
+    # Convert each page of the PDF to an image
+    pages = convert_from_path(file)
+    for page in pages:
+        # Perform OCR on the image
+        text += pytesseract.image_to_string(page)
     return text
-
 
 # Parsing functions for PDF text content
 def parse_payslip(text):
@@ -95,14 +95,17 @@ purpose = st.selectbox("Purpose of Loan", ["Home", "Car", "Education", "Business
 # Button to process verification and approval
 if st.button("Verify and Check Loan Status"):
     if payslip_file and bank_statement_file and nrc_file:
+        # OCR to extract text
         payslip_text = extract_text_from_pdf(payslip_file)
         bank_statement_text = extract_text_from_pdf(bank_statement_file)
         nrc_text = extract_text_from_pdf(nrc_file)
 
+        # Parse text data
         payslip_data = parse_payslip(payslip_text)
         bank_data = parse_bank_statement(bank_statement_text)
         nrc_data = parse_nrc(nrc_text)
 
+        # Verify documents
         verification_results = verify_documents(payslip_data, bank_data, nrc_data)
         st.subheader("Document Verification Results")
         for result in verification_results:
