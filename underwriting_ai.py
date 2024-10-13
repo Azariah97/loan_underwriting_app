@@ -1,18 +1,22 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import fitz  # PyMuPDF for reading PDFs
+import pdfplumber  # PyMuPDF for reading PDFs
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
 # Function to extract text from PDF
+import pdfplumber
+
+# Function to extract text from PDF using pdfplumber
 def extract_text_from_pdf(file):
-    with fitz.open(stream=file.read(), filetype="pdf") as doc:
-        text = ""
-        for page in doc:
-            text += page.get_text()
+    text = ""
+    with pdfplumber.open(file) as pdf:
+        for page in pdf.pages:
+            text += page.extract_text()
     return text
+
 
 # Parsing functions for PDF text content
 def parse_payslip(text):
@@ -129,5 +133,3 @@ if st.button("Verify and Check Loan Status"):
         st.write(f"**Loan Status:** {loan_status}")
     else:
         st.warning("Please upload all required documents.")
-
-
