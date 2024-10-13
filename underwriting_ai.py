@@ -1,21 +1,22 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-from pdf2image import convert_from_path
+import fitz  # PyMuPDF
 from PIL import Image
 import pytesseract
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
-# Function to extract text from PDF using OCR
+# Function to extract text from PDF using PyMuPDF and pytesseract
 def extract_text_from_pdf(file):
     text = ""
-    # Convert each page of the PDF to an image
-    pages = convert_from_path(file)
-    for page in pages:
-        # Perform OCR on the image
-        text += pytesseract.image_to_string(page)
+    with fitz.open(stream=file.read(), filetype="pdf") as pdf:
+        for page_num in range(pdf.page_count):
+            page = pdf[page_num]
+            pix = page.get_pixmap()  # Convert page to image
+            img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+            text += pytesseract.image_to_string(img)
     return text
 
 # Parsing functions for PDF text content
