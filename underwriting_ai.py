@@ -1,17 +1,17 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import fitz  # PyMuPDF
+import pdfplumber
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
-# Function to extract text from PDF using PyMuPDF
+# Function to extract text from PDF using pdfplumber
 def extract_text_from_pdf(file):
     text = ""
-    with fitz.open(stream=file.read(), filetype="pdf") as pdf:
-        for page in pdf:
-            text += page.get_text()
+    with pdfplumber.open(file) as pdf:
+        for page in pdf.pages:
+            text += page.extract_text()
     return text
 
 # Parsing functions for PDF text content
@@ -103,45 +103,54 @@ if st.button("Verify and Check Loan Status"):
         bank_data = parse_bank_statement(bank_statement_text)
         nrc_data = parse_nrc(nrc_text)
 
+        # Document verification results
         verification_results = verify_documents(payslip_data, bank_data, nrc_data)
         st.subheader("Document Verification Results")
         for result in verification_results:
             st.write("- " + result)
-
-        # Prepare input data for ML model with all expected columns
-        purpose_one_hot = {
-            "Purpose_Home": int(purpose == "Home"),
-            "Purpose_Car": int(purpose == "Car"),
-            "Purpose_Education": int(purpose == "Education"),
-            "Purpose_Business": int(purpose == "Business"),
-            "Purpose_Other": int(purpose == "Other"),
-        }
         
-        # Define all columns expected by the model
-        all_columns = [
-            "Age", "Income", "Loan Amount", "Loan Term", "Credit Score", 
-            "Employment Years", "Purpose_Home", "Purpose_Car", 
-            "Purpose_Education", "Purpose_Business", "Purpose_Other"
-        ]
-        
-        # Create input data and ensure all columns are included
-        input_data = pd.DataFrame({
-            "Age": [age],
-            "Income": [income],
-            "Loan Amount": [loan_amount],
-            "Loan Term": [loan_term],
-            "Credit Score": [credit_score],
-            "Employment Years": [employment_years],
-            **purpose_one_hot
-        })
+        # Rejection conditions
+        if "Name mismatch between payslip and NRC." in verification_results or "Income from payslip not found in bank deposits." in verification_results:
+            st.subheader("Loan Application Status")
+            st.write("**Loan Status:** Rejected due to document inconsistencies.")
+        elif loan_amount > 5 * income:
+            st.subheader("Loan Application Status")
+            st.write("**Loan Status:** Rejected - Requested loan amount is too high relative to income.")
+        else:
+            # Prepare input data for ML model with all expected columns
+            purpose_one_hot = {
+                "Purpose_Home": int(purpose == "Home"),
+                "Purpose_Car": int(purpose == "Car"),
+                "Purpose_Education": int(purpose == "Education"),
+                "Purpose_Business": int(purpose == "Business"),
+                "Purpose_Other": int(purpose == "Other"),
+            }
+            
+            # Define all columns expected by the model
+            all_columns = [
+                "Age", "Income", "Loan Amount", "Loan Term", "Credit Score", 
+                "Employment Years", "Purpose_Home", "Purpose_Car", 
+                "Purpose_Education", "Purpose_Business", "Purpose_Other"
+            ]
+            
+            # Create input data and ensure all columns are included
+            input_data = pd.DataFrame({
+                "Age": [age],
+                "Income": [income],
+                "Loan Amount": [loan_amount],
+                "Loan Term": [loan_term],
+                "Credit Score": [credit_score],
+                "Employment Years": [employment_years],
+                **purpose_one_hot
+            })
 
-        # Reindex to ensure input_data has all the expected columns
-        input_data = input_data.reindex(columns=all_columns, fill_value=0)
+            # Reindex to ensure input_data has all the expected columns
+            input_data = input_data.reindex(columns=all_columns, fill_value=0)
 
-        # Predict loan approval
-        prediction = model.predict(input_data)[0]
-        loan_status = "Approved" if prediction == 1 else "Rejected"
-        st.subheader("Loan Application Status")
-        st.write(f"**Loan Status:** {loan_status}")
+            # Predict loan approval
+            prediction = model.predict(input_data)[0]
+            loan_status = "Approved" if prediction == 1 else "Rejected"
+            st.subheader("Loan Application Status")
+            st.write(f"**Loan Status:** {loan_status}")
     else:
         st.warning("Please upload all required documents.")
