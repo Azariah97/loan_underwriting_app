@@ -1,17 +1,17 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import pdfplumber
+import fitz  # PyMuPDF
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
-# Function to extract text from PDF using pdfplumber
+# Function to extract text from PDF using PyMuPDF
 def extract_text_from_pdf(file):
     text = ""
-    with pdfplumber.open(file) as pdf:
-        for page in pdf.pages:
-            text += page.extract_text()
+    with fitz.open(stream=file.read(), filetype="pdf") as pdf:
+        for page in pdf:
+            text += page.get_text()
     return text
 
 # Parsing functions for PDF text content
