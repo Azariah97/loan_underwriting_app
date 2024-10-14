@@ -1,22 +1,17 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import fitz  # PyMuPDF
-from PIL import Image
-import pytesseract
+import pdfplumber
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
-# Function to extract text from PDF using PyMuPDF and pytesseract
+# Function to extract text from PDF using pdfplumber
 def extract_text_from_pdf(file):
     text = ""
-    with fitz.open(stream=file.read(), filetype="pdf") as pdf:
-        for page_num in range(pdf.page_count):
-            page = pdf[page_num]
-            pix = page.get_pixmap()  # Convert page to image
-            img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-            text += pytesseract.image_to_string(img)
+    with pdfplumber.open(file) as pdf:
+        for page in pdf.pages:
+            text += page.extract_text()
     return text
 
 # Parsing functions for PDF text content
@@ -61,6 +56,10 @@ def train_model():
         'Credit Score': np.random.randint(300, 850, num_samples),
         'Employment Years': np.random.randint(0, 40, num_samples),
         'Purpose_Home': np.random.choice([1, 0], num_samples),
+        'Purpose_Car': np.random.choice([1, 0], num_samples),
+        'Purpose_Education': np.random.choice([1, 0], num_samples),
+        'Purpose_Business': np.random.choice([1, 0], num_samples),
+        'Purpose_Other': np.random.choice([1, 0], num_samples),
         'Approval': np.random.choice([1, 0], num_samples)
     })
 
@@ -96,23 +95,20 @@ purpose = st.selectbox("Purpose of Loan", ["Home", "Car", "Education", "Business
 # Button to process verification and approval
 if st.button("Verify and Check Loan Status"):
     if payslip_file and bank_statement_file and nrc_file:
-        # OCR to extract text
         payslip_text = extract_text_from_pdf(payslip_file)
         bank_statement_text = extract_text_from_pdf(bank_statement_file)
         nrc_text = extract_text_from_pdf(nrc_file)
 
-        # Parse text data
         payslip_data = parse_payslip(payslip_text)
         bank_data = parse_bank_statement(bank_statement_text)
         nrc_data = parse_nrc(nrc_text)
 
-        # Verify documents
         verification_results = verify_documents(payslip_data, bank_data, nrc_data)
         st.subheader("Document Verification Results")
         for result in verification_results:
             st.write("- " + result)
 
-        # Prepare input data for ML model
+        # Prepare input data for ML model with all expected columns
         purpose_one_hot = {
             "Purpose_Home": int(purpose == "Home"),
             "Purpose_Car": int(purpose == "Car"),
@@ -120,6 +116,15 @@ if st.button("Verify and Check Loan Status"):
             "Purpose_Business": int(purpose == "Business"),
             "Purpose_Other": int(purpose == "Other"),
         }
+        
+        # Define all columns expected by the model
+        all_columns = [
+            "Age", "Income", "Loan Amount", "Loan Term", "Credit Score", 
+            "Employment Years", "Purpose_Home", "Purpose_Car", 
+            "Purpose_Education", "Purpose_Business", "Purpose_Other"
+        ]
+        
+        # Create input data and ensure all columns are included
         input_data = pd.DataFrame({
             "Age": [age],
             "Income": [income],
@@ -129,6 +134,9 @@ if st.button("Verify and Check Loan Status"):
             "Employment Years": [employment_years],
             **purpose_one_hot
         })
+
+        # Reindex to ensure input_data has all the expected columns
+        input_data = input_data.reindex(columns=all_columns, fill_value=0)
 
         # Predict loan approval
         prediction = model.predict(input_data)[0]
